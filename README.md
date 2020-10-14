@@ -1,0 +1,9 @@
+# Classroom-Reservation
+An Web-based Classroom Reservation Service for Kyung Hee Univ.
+
+## Maintainer
+- Myung-Hyun Kim ([Github](https://github.cmm/freckie))
+- Young-Min Ahn ([Github](https://github.com/ph-2))
+
+## Environment
+(under development)
