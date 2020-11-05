@@ -1,0 +1,130 @@
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+<script>
+  /**
+   * Run initializations on sidebar load.
+   */
+  $(function() {
+    $('#formSubmitBtn').click(submit);
+
+    // Assign handler functions to sidebar elements here, if needed.
+
+    // Call the server here to retrieve any information needed to build
+    // the dialog, if necessary.
+
+    // Start polling for updates        
+    poll(1000);
+  });
+
+  /**
+   * Poll a server-side function at the given interval, to have
+   * results passed to a successHandler callback.
+   *
+   * https://stackoverflow.com/a/24773178/1677912
+   *
+   * @param {Number} interval   (optional) Time in ms between polls.
+   *                            Default is 1s (1000ms)
+   */
+  function poll(interval) {
+    interval = interval || 1000;
+    //interval = 500;
+    setTimeout(function() {
+      google.script.run
+        .withSuccessHandler(updateFormValues)
+        .withFailureHandler(function (error) { //To-do! Failuer처리는 어떻게?
+        var div = document.getElementById('error');
+        div.innerHTML = "ERROR: " + error.message;
+      })
+        .getRange();
+    }, interval);
+  };
+  
+  
+  function validateRange(range, topHeader) {
+    // domain내의 범위인가 (top header제외)
+    const top = 2;
+    const outOfRange = 34;
+    if (top >= range.row || outOfRange <= range.row)
+      return {code: "error-04"};
+    
+    //range column이 left header와 right header사이에 있는가  
+    const leftHeader = 2;
+    const rightHeader = 35;
+    if (range.col <= leftHeader || range.col >= rightHeader){ //To-do! 고정값으로 할 것인가, sheet인식해서 값 변동시킬 것인가.
+      return {code: "error-02"};
+      } 
+        
+    //range가 1열로 이루어져있는가
+    if (range.width != 1)
+      return {code: "error-01"};      
+      
+    // 이미 예약된 항목과 겹치는가 //To-do! 백엔드에서 동시성 제어하도록 전환할 것
+    for (var i = 0; i < range.height; ++i) {
+      for (var j = 0; j < range.width; ++j) {
+        if (range.values[i][j] !== ""){
+          return {code: "error-05"};
+        }
+      }
+    }
+    
+    //수용인원을 초과하는가
+    var lastIdx = topHeader.lastIndexOf("명")
+    var startIdx = topHeader.lastIndexOf("\n", lastIdx) + 1;
+    var capacity = parseInt(topHeader.substring(startIdx, lastIdx));
+    if (capacity < $('input[name=num-people]').val())
+      return {code: "error-03"};
+    
+    return {code: ""};
+  }
+  
+  
+  
+ 
+  
+  // param: rangeInfo -> [{int col, int width, int height}, String topHeader's value (like 전정\n205\n202명)]
+  function updateFormValues([range, topHeader, date]) {
+    var ret = validateRange(range, topHeader);
+    if (ret.code === "") {
+      var parsed = topHeader.split("\n");
+      var classroom = parsed[0] + " " + parsed[1];
+      
+      $('input[name=classroom]').val(classroom);
+      
+      var start = 9 * 60 + 30 * (range.row - 3);
+      var stop = start + 30 * range.height;
+      var startStr = parseInt(start/60).toString() + ":" + ((start%60)<10 ? '0' + (start % 60).toString() : (start % 60).toString());
+      var stopStr = parseInt(stop/60).toString() + ":" + ((stop%60)<10 ? '0' + (stop % 60).toString() : (stop % 60).toString());
+      var timeInterval = startStr + "~" + stopStr;
+      $('input[name=time]').val(date + " " + timeInterval);
+      $('#errorCode').val(ret.code);
+      poll(1000);
+      return;
+      
+    }
+    $('input[name=classroom]').val("");
+    $('input[name=time]').val("");
+    $('#errorCode').val(ret.code);
+    poll(1000);
+  };
+
+  function submit() {
+  // 변수들
+  var inputValues = {
+      profName: $('#formInputProfName').val(),
+      classCode: $('#formInputClassCode').val(),
+      className: $('#formInputClassName').val(),
+      numPeople: $('#formInputNumPeople').val(),
+      classRoom: $('#formInputClassRoom').val(),
+      time: $('#formInputTime').val()
+  };
+  var errorCode = $('#errorCode').val();
+
+  google.script.run
+      .withSuccessHandler(function () {
+      })
+      .withFailureHandler(function (error) {
+      console.log('[submit() Error]', error);
+      })
+      .submit(inputValues, errorCode);
+  }
+
+</script>
