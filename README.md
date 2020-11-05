@@ -6,4 +6,5 @@ An Web-based Classroom Reservation Service for Kyung Hee Univ.
 - Young-Min Ahn ([Github](https://github.com/ph-2))
 
 ## Environment
-(under development)
+- Google Cloud Platform
+- Google Apps Script
