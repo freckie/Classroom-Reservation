@@ -29,26 +29,32 @@ func (e *Endpoints) ReservationPost(w http.ResponseWriter, r *http.Request, ps h
 	sheetID := ps.ByName("sheet_id")
 
 	// Check Permission
-	var _timetable, _email string
-	var userID int
+	var _count int64
 	timetable := fmt.Sprintf("%s,%s", fileID, sheetID)
 	row := e.DB.QueryRow(`
-		SELECT a.timetable_id, u.email, u.id
-		FROM allowlist AS a, users AS u
-		WHERE a.timetable_id=?
-			AND a.user_id=u.id;
+		SELECT count(timetable_id)
+		FROM allowlist
+		WHERE timetable_id=?;
 	`, timetable)
-	if err := row.Scan(&_timetable, &_email, &userID); err != nil {
-		if err == sql.ErrNoRows {
-			functions.ResponseError(w, 404, "존재하지 않는 timetable")
+	if err := row.Scan(&_count); err == nil {
+		if _count <= 0 {
+			functions.ResponseError(w, 404, "존재하지 않는 timetable.")
 			return
 		}
-		functions.ResponseError(w, 500, "예기치 못한 에러 발생 : "+err.Error())
-		return
 	}
-	if _email != email {
-		functions.ResponseError(w, 403, "timetable 접근 권한 부족")
-		return
+
+	row = e.DB.QueryRow(`
+		SELECT count(a.timetable_id)
+		FROM allowlist AS a, users AS u
+		WHERE a.user_id=u.id
+			AND a.timetable_id=?
+			AND u.email=?;
+	`, timetable, email)
+	if err := row.Scan(&_count); err == nil {
+		if _count <= 0 {
+			functions.ResponseError(w, 403, "timetable에 접근할 권한이 부족합니다.")
+			return
+		}
 	}
 
 	// Parse Request Data
@@ -116,8 +122,10 @@ loopCheckingValidation:
 	// Querying (Making a Transaction)
 	res, err := e.DB.Exec(`
 		INSERT INTO transactions (transaction_type, user_id, timetable_id, lecture, capacity, cell_column, cell_start, cell_end, professor)
-		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?);
-		`, userID, timetable, *(reqData.Lecture), *(reqData.Capacity), *(reqData.Column), *(reqData.Start), *(reqData.End), *(reqData.Professor))
+		VALUES (1, (
+			SELECT id FROM users WHERE email=?
+		), ?, ?, ?, ?, ?, ?, ?);
+		`, email, timetable, *(reqData.Lecture), *(reqData.Capacity), *(reqData.Column), *(reqData.Start), *(reqData.End), *(reqData.Professor))
 	if err != nil {
 		functions.ResponseError(w, 500, err.Error())
 		return
@@ -155,31 +163,38 @@ func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps
 	sheetID := ps.ByName("sheet_id")
 	reservationID := ps.ByName("reservation_id")
 
-	// Check Timetable Permission
-	var _timetable, _email string
-	var userID int
+	// Check Permission
+	var _count int64
 	timetable := fmt.Sprintf("%s,%s", fileID, sheetID)
 	row := e.DB.QueryRow(`
-		SELECT a.timetable_id, u.email, u.id
-		FROM allowlist AS a, users AS u
-		WHERE a.timetable_id=?
-			AND a.user_id=u.id;
+		SELECT count(timetable_id)
+		FROM allowlist
+		WHERE timetable_id=?;
 	`, timetable)
-	if err := row.Scan(&_timetable, &_email, &userID); err != nil {
-		if err == sql.ErrNoRows {
-			functions.ResponseError(w, 404, "존재하지 않는 timetable")
+	if err := row.Scan(&_count); err == nil {
+		if _count <= 0 {
+			functions.ResponseError(w, 404, "존재하지 않는 timetable.")
 			return
 		}
-		functions.ResponseError(w, 500, "예기치 못한 에러 발생 : "+err.Error())
-		return
 	}
-	if _email != email {
-		functions.ResponseError(w, 403, "timetable 접근 권한 부족")
-		return
+
+	row = e.DB.QueryRow(`
+		SELECT count(a.timetable_id)
+		FROM allowlist AS a, users AS u
+		WHERE a.user_id=u.id
+			AND a.timetable_id=?
+			AND u.email=?;
+	`, timetable, email)
+	if err := row.Scan(&_count); err == nil {
+		if _count <= 0 {
+			functions.ResponseError(w, 403, "timetable에 접근할 권한이 부족합니다.")
+			return
+		}
 	}
 
 	// Check Transaction Permission
 	var _transactionType int64
+	var _email string
 	row = e.DB.QueryRow(`
 		SELECT u.email, t.transaction_type
 		FROM transactions AS t, users AS u

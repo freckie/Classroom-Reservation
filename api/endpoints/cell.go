@@ -57,23 +57,32 @@ func (e *Endpoints) CellGet(w http.ResponseWriter, r *http.Request, ps httproute
 	}
 
 	// Check Permission
-	var _timetable, _email string
+	var _count int64
 	timetable := fmt.Sprintf("%s,%s", fileID, sheetID)
 	row := e.DB.QueryRow(`
-		SELECT a.timetable_id, u.email
-		FROM allowlist AS a, users AS u
-		WHERE a.timetable_id=?
-			AND a.user_id=u.id;
+		SELECT count(timetable_id)
+		FROM allowlist
+		WHERE timetable_id=?;
 	`, timetable)
-	if err := row.Scan(&_timetable, &_email); err != nil {
-		if err == sql.ErrNoRows {
-			functions.ResponseError(w, 404, "존재하지 않은 timetable.")
+	if err := row.Scan(&_count); err == nil {
+		if _count <= 0 {
+			functions.ResponseError(w, 404, "존재하지 않는 timetable.")
 			return
 		}
 	}
-	if _email != email {
-		functions.ResponseError(w, 403, "timetable 접근 권한 부족")
-		return
+
+	row = e.DB.QueryRow(`
+		SELECT count(a.timetable_id)
+		FROM allowlist AS a, users AS u
+		WHERE a.user_id=u.id
+			AND a.timetable_id=?
+			AND u.email=?;
+	`, timetable, email)
+	if err := row.Scan(&_count); err == nil {
+		if _count <= 0 {
+			functions.ResponseError(w, 403, "timetable에 접근할 권한이 부족합니다.")
+			return
+		}
 	}
 
 	// Result Resp
@@ -85,10 +94,9 @@ func (e *Endpoints) CellGet(w http.ResponseWriter, r *http.Request, ps httproute
 		SELECT u.email, u.id, t.cell_column, t.cell_start, t.cell_end, t.lecture, t.professor, t.transaction_id, t.created_at, t.capacity
 		FROM transactions AS t, users AS u
 		WHERE t.user_id=u.id
-			AND u.email=?
 			AND t.transaction_type=1
 			AND t.timetable_id=?
-			AND t.cell_column=?;`, email, timetable, cellColumn)
+			AND t.cell_column=?;`, timetable, cellColumn)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			resp.CellsCount = 0
