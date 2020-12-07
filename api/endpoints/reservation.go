@@ -89,8 +89,9 @@ func (e *Endpoints) ReservationPost(w http.ResponseWriter, r *http.Request, ps h
 		SELECT cell_start, cell_end
 		FROM transactions
 		WHERE transaction_type=1
+			AND timetable_id=?
 			AND cell_column=?;
-	`, *(reqData.Column))
+	`, timetable, *(reqData.Column))
 	if err == sql.ErrNoRows {
 		isPossible = true
 	}
