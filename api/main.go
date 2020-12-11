@@ -61,6 +61,7 @@ func main() {
 	// Router Setting
 	router := httprouter.New()
 	router.GET("/api", ep.IndexGet)
+	router.POST("/api/users", ep.UsersPost)
 	router.GET("/api/timetables/:file_id/:sheet_id/cell", ep.CellGet)
 	router.POST("/api/timetables/:file_id/:sheet_id/reservation", ep.ReservationPost)
 	router.DELETE("/api/timetables/:file_id/:sheet_id/reservation/:reservation_id", ep.ReservationDelete)
@@ -69,10 +70,12 @@ func main() {
 	portStr := strconv.Itoa(cfg.Server.Port)
 	if cfg.Server.LocalMode {
 		handler := cors.AllowAll().Handler(router)
+		hs := make(HostSwitch)
+		hs["icns.frec.kr:8080"] = handler
 
 		// Start Server in Local Mode
 		log.Println("[Local Mode] Starting HTTP API Server on port", portStr)
-		log.Fatal(http.ListenAndServe(":"+portStr, handler))
+		log.Fatal(http.ListenAndServe(":"+portStr, hs))
 
 	} else { // Release Mode
 		handler := cors.AllowAll().Handler(router)
