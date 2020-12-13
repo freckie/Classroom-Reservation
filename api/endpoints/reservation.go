@@ -83,9 +83,17 @@ func (e *Endpoints) ReservationPost(w http.ResponseWriter, r *http.Request, ps h
 		return
 	}
 
+	// Querying with Transaction
+	tx, err := e.DB.Begin()
+	if err != nil {
+		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
+		return
+	}
+	defer tx.Rollback()
+
 	// Querying (Cell Validation Check)
 	isPossible := true
-	rows, err := e.DB.Query(`
+	rows, err := tx.Query(`
 		SELECT cell_start, cell_end
 		FROM transactions
 		WHERE transaction_type=1
@@ -120,8 +128,8 @@ loopCheckingValidation:
 	// Result Resp
 	resp := models.ReservationPostResponse{}
 
-	// Querying (Making a Transaction)
-	res, err := e.DB.Exec(`
+	// Querying
+	res, err := tx.Exec(`
 		INSERT INTO transactions (transaction_type, user_id, timetable_id, lecture, capacity, cell_column, cell_start, cell_end, professor)
 		VALUES (1, (
 			SELECT id FROM users WHERE email=?
@@ -129,6 +137,12 @@ loopCheckingValidation:
 		`, email, timetable, *(reqData.Lecture), *(reqData.Capacity), *(reqData.Column), *(reqData.Start), *(reqData.End), *(reqData.Professor))
 	if err != nil {
 		functions.ResponseError(w, 500, err.Error())
+		return
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
 		return
 	}
 
@@ -193,16 +207,24 @@ func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps
 		}
 	}
 
+	// Querying with Transaction
+	tx, err := e.DB.Begin()
+	if err != nil {
+		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
+		return
+	}
+	defer tx.Rollback()
+
 	// Check Transaction Permission
 	var _transactionType int64
 	var _email string
-	row = e.DB.QueryRow(`
+	row = tx.QueryRow(`
 		SELECT u.email, t.transaction_type
 		FROM transactions AS t, users AS u
 		WHERE t.user_id=u.id
 			AND t.transaction_id=?;
 	`, reservationID)
-	err := row.Scan(&_email, &_transactionType)
+	err = row.Scan(&_email, &_transactionType)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			functions.ResponseError(w, 404, "존재하지 않는 예약")
@@ -221,7 +243,7 @@ func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps
 	}
 
 	// Querying
-	res, err := e.DB.Exec(`
+	res, err := tx.Exec(`
 		UPDATE transactions SET transaction_type=0 WHERE transaction_id=?
 	`, reservationID)
 	if err != nil {
@@ -230,6 +252,12 @@ func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps
 	}
 	if affected, _ := res.RowsAffected(); affected != 1 {
 		functions.ResponseError(w, 500, "예기치 못한 에러 발생. (RowsAffected != 1)")
+		return
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
 		return
 	}
 

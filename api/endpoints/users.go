@@ -68,11 +68,36 @@ func (e *Endpoints) UsersPost(w http.ResponseWriter, r *http.Request, ps httprou
 		isSuper = *(reqData.IsSuper)
 	}
 
-	// Querying
-	result, err := e.DB.Exec(`
+	// Querying with Transaction
+	tx, err := e.DB.Begin()
+	if err != nil {
+		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
+		return
+	}
+	defer tx.Rollback()
+
+	row = tx.QueryRow(`
+		SELECT count(id)
+		FROM users
+		WHERE email=?;
+	`, *(reqData.Email))
+	if err = row.Scan(&_count); err == nil {
+		if _count > 0 {
+			functions.ResponseError(w, 500, "이미 존재하는 이메일입니다.")
+			return
+		}
+	}
+
+	result, err := tx.Exec(`
 		INSERT INTO users (email, is_super)
 		VALUES (?, ?);
 	`, *(reqData.Email), isSuper)
+	if err != nil {
+		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
+		return
+	}
+
+	err = tx.Commit()
 	if err != nil {
 		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
 		return
