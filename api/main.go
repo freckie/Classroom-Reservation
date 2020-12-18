@@ -64,6 +64,7 @@ func main() {
 	router.POST("/api/users", ep.UsersPost)
 	router.GET("/api/timetables/:file_id/:sheet_id/cell", ep.CellGet)
 	router.POST("/api/timetables/:file_id/:sheet_id/allow", ep.AllowlistPost)
+	router.DELETE("/api/timetables/:file_id/:sheet_id/allow", ep.AllowlistDelete)
 	router.POST("/api/timetables/:file_id/:sheet_id/reservation", ep.ReservationPost)
 	router.DELETE("/api/timetables/:file_id/:sheet_id/reservation/:reservation_id", ep.ReservationDelete)
 
