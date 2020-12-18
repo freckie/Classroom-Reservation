@@ -11,6 +11,7 @@ import (
 
 	"classroom/endpoints"
 	"classroom/functions"
+	"classroom/utils"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/julienschmidt/httprouter"
@@ -56,7 +57,17 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	ep := endpoints.Endpoints{DB: db}
+
+	// Google API Setting
+	sheets, err := utils.NewSheetsService(cfg.Google.CredentialsPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ep := endpoints.Endpoints{
+		DB:     db,
+		Sheets: sheets,
+	}
 
 	// Router Setting
 	router := httprouter.New()

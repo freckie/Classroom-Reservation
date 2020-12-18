@@ -3,11 +3,13 @@ package endpoints
 import (
 	"classroom/functions"
 	"classroom/models"
+	"classroom/utils"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
@@ -29,45 +31,19 @@ func (e *Endpoints) ReservationPost(w http.ResponseWriter, r *http.Request, ps h
 	sheetID := ps.ByName("sheet_id")
 
 	// Check Permission
-	var _count int64
+	var _timetableName string
 	timetable := fmt.Sprintf("%s,%s", fileID, sheetID)
 	row := e.DB.QueryRow(`
-		SELECT count(timetable_id)
-		FROM allowlist
+		SELECT name
+		FROM timetables
 		WHERE timetable_id=?;
 	`, timetable)
-	if err := row.Scan(&_count); err == nil {
-		if _count <= 0 {
+	if err := row.Scan(&_timetableName); err != nil {
+		if err == sql.ErrNoRows {
 			functions.ResponseError(w, 404, "존재하지 않는 timetable.")
 			return
 		}
 	}
-
-	// row = e.DB.QueryRow(`
-	// 	SELECT (
-	// 		SELECT count(a.timetable_id)
-	// 		FROM allowlist AS a, users AS u
-	// 		WHERE a.user_id=u.id
-	// 			AND a.timetable_id=?
-	// 			AND u.email=?
-	// 	) AS count,
-	// 	(
-	// 		SELECT is_super FROM users WHERE email=?
-	// 	) AS is_super;
-	// `, timetable, email, email)
-	// if err := row.Scan(&_count, &_isSuper); err == nil {
-	// 	if _isSuper != 1 {
-	// 		functions.ResponseError(w, 403, "관리자만 접근할 수 있는 기능입니다.")
-	// 		return
-	// 	}
-	// 	if _count <= 0 {
-	// 		functions.ResponseError(w, 403, "timetable에 접근할 권한이 부족합니다.")
-	// 		return
-	// 	}
-	// } else {
-	// 	functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
-	// 	return
-	// }
 
 	// Parse Request Data
 	type reqDataStruct struct {
@@ -153,6 +129,26 @@ loopCheckingValidation:
 		return
 	}
 
+	// Merge and write value on cells
+	cellValue := fmt.Sprintf("%s\n%s", *(reqData.Lecture), *(reqData.Professor))
+	sheetIDint, _ := strconv.Atoi(sheetID)
+	sr := utils.NewSheetsRequest(
+		fileID,
+		_timetableName,
+		int64(sheetIDint),
+		*(reqData.Column),
+		int64(*(reqData.Start)),
+		int64(*(reqData.End)),
+		cellValue,
+	)
+	fmt.Println(sr)
+	err = e.Sheets.WriteAndMerge(sr)
+	if err != nil {
+		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
+		return
+	}
+
+	// Transaction Commit
 	err = tx.Commit()
 	if err != nil {
 		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
@@ -161,7 +157,7 @@ loopCheckingValidation:
 
 	resp.TransactionID, err = res.LastInsertId()
 	if err != nil {
-		functions.ResponseError(w, 500, err.Error())
+		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
 		return
 	}
 
@@ -192,15 +188,16 @@ func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps
 	reservationID := ps.ByName("reservation_id")
 
 	// Check Permission
-	var _count, isSuper int64
+	var isSuper int64
+	var _timetableName string
 	timetable := fmt.Sprintf("%s,%s", fileID, sheetID)
 	row := e.DB.QueryRow(`
-		SELECT count(timetable_id)
-		FROM allowlist
+		SELECT name
+		FROM timetables
 		WHERE timetable_id=?;
 	`, timetable)
-	if err := row.Scan(&_count); err == nil {
-		if _count <= 0 {
+	if err := row.Scan(&_timetableName); err != nil {
+		if err == sql.ErrNoRows {
 			functions.ResponseError(w, 404, "존재하지 않는 timetable.")
 			return
 		}
@@ -227,15 +224,15 @@ func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps
 	defer tx.Rollback()
 
 	// Check Transaction Permission
-	var _transactionType int64
-	var _email string
+	var _transactionType, _cellStart, _cellEnd int64
+	var _email, _cellColumn string
 	row = tx.QueryRow(`
-		SELECT u.email, t.transaction_type
+		SELECT u.email, t.transaction_type, t.cell_column, t.cell_start, t.cell_end
 		FROM transactions AS t, users AS u
 		WHERE t.user_id=u.id
 			AND t.transaction_id=?;
 	`, reservationID)
-	err = row.Scan(&_email, &_transactionType)
+	err = row.Scan(&_email, &_transactionType, &_cellColumn, &_cellStart, &_cellEnd)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			functions.ResponseError(w, 404, "존재하지 않는 예약")
@@ -268,6 +265,24 @@ func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps
 		return
 	}
 
+	// Unmerge and clear value on cells
+	sheetIDint, _ := strconv.Atoi(sheetID)
+	sr := utils.NewSheetsRequest(
+		fileID,
+		_timetableName,
+		int64(sheetIDint),
+		_cellColumn,
+		_cellStart,
+		_cellEnd,
+		"",
+	)
+	err = e.Sheets.RemoveValue(sr)
+	if err != nil {
+		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
+		return
+	}
+
+	// Transaction Commit
 	err = tx.Commit()
 	if err != nil {
 		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())

@@ -1,9 +1,11 @@
 package endpoints
 
 import (
+	"classroom/utils"
 	"database/sql"
 )
 
 type Endpoints struct {
-	DB *sql.DB
+	DB     *sql.DB
+	Sheets *utils.SheetsService
 }

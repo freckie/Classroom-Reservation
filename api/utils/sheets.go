@@ -111,6 +111,7 @@ func (s *SheetsService) RemoveValue(sr SheetsRequest) error {
 
 type SheetsRequest struct {
 	SpreadSheetID string
+	SheetName     string
 	SheetID       int64
 	Range         *sheets.GridRange
 	RangeStr      string
@@ -118,7 +119,7 @@ type SheetsRequest struct {
 }
 
 func NewSheetsRequest(
-	spreadSheetID string, sheetID int64, column string, start, end int64, value string) SheetsRequest {
+	spreadSheetID, sheetName string, sheetID int64, column string, start, end int64, value string) SheetsRequest {
 	colIndex := A1ToInt(column)
 
 	req := SheetsRequest{}
@@ -131,7 +132,7 @@ func NewSheetsRequest(
 		StartRowIndex:    start - 1,
 		EndRowIndex:      end,
 	}
-	req.RangeStr = fmt.Sprintf("%s%d:%s%d", column, start, column, end)
+	req.RangeStr = fmt.Sprintf("%s!%s%d:%s%d", sheetName, column, start, column, end)
 	req.Value = value
 	return req
 }

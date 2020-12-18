@@ -6,8 +6,13 @@ import (
 )
 
 type Config struct {
+	Google   ConfigGoogle   `json:"google"`
 	Server   ConfigServer   `json:"server"`
 	Database ConfigDatabase `json:"database"`
+}
+
+type ConfigGoogle struct {
+	CredentialsPath string `json:"credentials_path"`
 }
 
 type ConfigServer struct {
