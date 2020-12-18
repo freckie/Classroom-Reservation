@@ -11,8 +11,9 @@ type Config struct {
 }
 
 type ConfigServer struct {
-	LocalMode bool `json:"local_mode"`
-	Port      int  `json:"port"`
+	LocalMode bool   `json:"local_mode"`
+	Host      string `json:"host"`
+	Port      int    `json:"port"`
 }
 
 type ConfigDatabase struct {

@@ -71,7 +71,7 @@ func main() {
 	if cfg.Server.LocalMode {
 		handler := cors.AllowAll().Handler(router)
 		hs := make(HostSwitch)
-		hs["icns.frec.kr:8080"] = handler
+		hs[config.Server.Host+":"+config.Server.Port]
 
 		// Start Server in Local Mode
 		log.Println("[Local Mode] Starting HTTP API Server on port", portStr)
