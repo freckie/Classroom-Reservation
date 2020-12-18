@@ -3,6 +3,7 @@ package endpoints
 import (
 	"classroom/functions"
 	"classroom/models"
+	"database/sql"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -10,6 +11,68 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 )
+
+// GET /users
+func (e *Endpoints) UsersGet(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	// Get user email
+	var email string
+	if _email, ok := r.Header["X-User-Email"]; ok {
+		email = _email[0]
+	} else {
+		functions.ResponseError(w, 401, "X-User-Email 헤더를 보내세요.")
+		return
+	}
+
+	// Permission Check
+	var isSuper int
+	row := e.DB.QueryRow(`
+		SELECT is_super FROM users WHERE email=?;
+	`, email)
+	if err := row.Scan(&isSuper); err != nil {
+		if err == sql.ErrNoRows {
+			functions.ResponseError(w, 401, "해당 유저가 존재하지 않음")
+			return
+		}
+		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
+		return
+	}
+	if isSuper == 0 {
+		functions.ResponseError(w, 403, "접근 권한 부족. 관리자만 허용된 기능입니다.")
+		return
+	}
+
+	// Result Resp
+	resp := models.UsersGetResponse{}
+	resp.Users = []models.UsersGetItem{}
+
+	// Querying
+	rows, err := e.DB.Query(`
+		SELECT id, email, is_super FROM users;`)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			resp.UsersCount = 0
+			functions.ResponseOK(w, "success", resp)
+			return
+		}
+		functions.ResponseError(w, 500, err.Error())
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		temp := models.UsersGetItem{}
+		err := rows.Scan(&temp.UserID, &temp.UserEmail, &temp.IsSuper)
+		if err != nil {
+			continue
+		}
+		resp.Users = append(resp.Users, temp)
+	}
+
+	// Struct for response
+	resp.UsersCount = len(resp.Users)
+
+	functions.ResponseOK(w, "success", resp)
+}
 
 // POST /users
 func (e *Endpoints) UsersPost(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {

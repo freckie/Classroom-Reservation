@@ -29,7 +29,7 @@ func (e *Endpoints) ReservationPost(w http.ResponseWriter, r *http.Request, ps h
 	sheetID := ps.ByName("sheet_id")
 
 	// Check Permission
-	var _count, _isSuper int64
+	var _count int64
 	timetable := fmt.Sprintf("%s,%s", fileID, sheetID)
 	row := e.DB.QueryRow(`
 		SELECT count(timetable_id)
@@ -43,31 +43,31 @@ func (e *Endpoints) ReservationPost(w http.ResponseWriter, r *http.Request, ps h
 		}
 	}
 
-	row = e.DB.QueryRow(`
-		SELECT (
-			SELECT count(a.timetable_id)
-			FROM allowlist AS a, users AS u
-			WHERE a.user_id=u.id
-				AND a.timetable_id=?
-				AND u.email=?
-		) AS count,
-		(
-			SELECT is_super FROM users WHERE email=?
-		) AS is_super;
-	`, timetable, email, email)
-	if err := row.Scan(&_count, &_isSuper); err == nil {
-		if _isSuper != 1 {
-			functions.ResponseError(w, 403, "관리자만 접근할 수 있는 기능입니다.")
-			return
-		}
-		if _count <= 0 {
-			functions.ResponseError(w, 403, "timetable에 접근할 권한이 부족합니다.")
-			return
-		}
-	} else {
-		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
-		return
-	}
+	// row = e.DB.QueryRow(`
+	// 	SELECT (
+	// 		SELECT count(a.timetable_id)
+	// 		FROM allowlist AS a, users AS u
+	// 		WHERE a.user_id=u.id
+	// 			AND a.timetable_id=?
+	// 			AND u.email=?
+	// 	) AS count,
+	// 	(
+	// 		SELECT is_super FROM users WHERE email=?
+	// 	) AS is_super;
+	// `, timetable, email, email)
+	// if err := row.Scan(&_count, &_isSuper); err == nil {
+	// 	if _isSuper != 1 {
+	// 		functions.ResponseError(w, 403, "관리자만 접근할 수 있는 기능입니다.")
+	// 		return
+	// 	}
+	// 	if _count <= 0 {
+	// 		functions.ResponseError(w, 403, "timetable에 접근할 권한이 부족합니다.")
+	// 		return
+	// 	}
+	// } else {
+	// 	functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
+	// 	return
+	// }
 
 	// Parse Request Data
 	type reqDataStruct struct {
@@ -192,7 +192,7 @@ func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps
 	reservationID := ps.ByName("reservation_id")
 
 	// Check Permission
-	var _count, _isSuper int64
+	var _count, isSuper int64
 	timetable := fmt.Sprintf("%s,%s", fileID, sheetID)
 	row := e.DB.QueryRow(`
 		SELECT count(timetable_id)
@@ -207,27 +207,13 @@ func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps
 	}
 
 	row = e.DB.QueryRow(`
-		SELECT (
-			SELECT count(a.timetable_id)
-			FROM allowlist AS a, users AS u
-			WHERE a.user_id=u.id
-				AND a.timetable_id=?
-				AND u.email=?
-		) AS count,
-		(
-			SELECT is_super FROM users WHERE email=?
-		) AS is_super;
-	`, timetable, email, email)
-	if err := row.Scan(&_count, &_isSuper); err == nil {
-		if _isSuper != 1 {
-			functions.ResponseError(w, 403, "관리자만 접근할 수 있는 기능입니다.")
+		SELECT is_super FROM users WHERE email=?
+	`, email)
+	if err := row.Scan(&isSuper); err != nil {
+		if err == sql.ErrNoRows {
+			functions.ResponseError(w, 401, "해당 유저가 존재하지 않음")
 			return
 		}
-		if _count <= 0 {
-			functions.ResponseError(w, 403, "timetable에 접근할 권한이 부족합니다.")
-			return
-		}
-	} else {
 		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
 		return
 	}
@@ -258,9 +244,11 @@ func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps
 		functions.ResponseError(w, 500, "예기치 못한 에러 발생 : "+err.Error())
 		return
 	}
-	if _email != email {
-		functions.ResponseError(w, 403, "예약 접근 권한 부족")
-		return
+	if isSuper == 0 {
+		if _email != email {
+			functions.ResponseError(w, 403, "예약 접근 권한 부족")
+			return
+		}
 	}
 	if _transactionType == 0 {
 		functions.ResponseError(w, 500, "이미 취소된 예약")

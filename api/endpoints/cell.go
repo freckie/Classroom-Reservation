@@ -57,7 +57,7 @@ func (e *Endpoints) CellGet(w http.ResponseWriter, r *http.Request, ps httproute
 	}
 
 	// Check Permission
-	var _count int64
+	var _count, isSuper int64
 	timetable := fmt.Sprintf("%s,%s", fileID, sheetID)
 	row := e.DB.QueryRow(`
 		SELECT count(timetable_id)
@@ -72,17 +72,15 @@ func (e *Endpoints) CellGet(w http.ResponseWriter, r *http.Request, ps httproute
 	}
 
 	row = e.DB.QueryRow(`
-		SELECT count(a.timetable_id)
-		FROM allowlist AS a, users AS u
-		WHERE a.user_id=u.id
-			AND a.timetable_id=?
-			AND u.email=?;
-	`, timetable, email)
-	if err := row.Scan(&_count); err == nil {
-		if _count <= 0 {
-			functions.ResponseError(w, 403, "timetable에 접근할 권한이 부족합니다.")
+		SELECT is_super FROM users WHERE email=?
+	`, email)
+	if err := row.Scan(&isSuper); err != nil {
+		if err == sql.ErrNoRows {
+			functions.ResponseError(w, 401, "해당 유저가 존재하지 않음")
 			return
 		}
+		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
+		return
 	}
 
 	// Result Resp
