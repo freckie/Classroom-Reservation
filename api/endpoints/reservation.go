@@ -70,7 +70,8 @@ func (e *Endpoints) ReservationPost(w http.ResponseWriter, r *http.Request, ps h
 	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			functions.ResponseError(w, 500, err.Error())
+			functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
+			return
 		}
 		json.Unmarshal(body, &reqData)
 	} else {
