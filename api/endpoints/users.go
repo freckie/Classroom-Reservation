@@ -30,7 +30,7 @@ func (e *Endpoints) UsersGet(w http.ResponseWriter, r *http.Request, ps httprout
 	`, email)
 	if err := row.Scan(&isSuper); err != nil {
 		if err == sql.ErrNoRows {
-			functions.ResponseError(w, 401, "해당 유저가 존재하지 않음")
+			functions.ResponseError(w, 401, "해당 유저가 존재하지 않습니다.")
 			return
 		}
 		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())

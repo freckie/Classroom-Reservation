@@ -96,12 +96,12 @@ func (s *SheetsService) RemoveValue(sr SheetsRequest) error {
 		Requests: []*sheets.Request{req, req2},
 	}
 
-	_, err := s.srv.Spreadsheets.BatchUpdate(sr.SpreadSheetID, rb).Context(s.ctx).Do()
+	_, err := s.srv.Spreadsheets.Values.Clear(sr.SpreadSheetID, sr.RangeStr, &sheets.ClearValuesRequest{}).Do()
 	if err != nil {
 		return err
 	}
 
-	_, err = s.srv.Spreadsheets.Values.Clear(sr.SpreadSheetID, sr.RangeStr, &sheets.ClearValuesRequest{}).Do()
+	_, err = s.srv.Spreadsheets.BatchUpdate(sr.SpreadSheetID, rb).Context(s.ctx).Do()
 	if err != nil {
 		return err
 	}

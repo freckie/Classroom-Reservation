@@ -15,7 +15,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// POST /timetables/<file_id>/<sheet_id>/reservation
+// POST /files/<file_id>/<sheet_id>/reservation
 func (e *Endpoints) ReservationPost(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Get user email
 	var email string
@@ -31,18 +31,38 @@ func (e *Endpoints) ReservationPost(w http.ResponseWriter, r *http.Request, ps h
 	sheetID := ps.ByName("sheet_id")
 
 	// Check Permission
-	var _timetableName string
-	timetable := fmt.Sprintf("%s,%s", fileID, sheetID)
+	var _count int64
+	var isSuper, sheetIDAuto sql.NullInt64
+	var sheetName sql.NullString
 	row := e.DB.QueryRow(`
-		SELECT name
-		FROM timetables
-		WHERE timetable_id=?;
-	`, timetable)
-	if err := row.Scan(&_timetableName); err != nil {
-		if err == sql.ErrNoRows {
-			functions.ResponseError(w, 404, "존재하지 않는 timetable.")
+		SELECT
+			(SELECT count(s.id)
+			FROM sheets AS s, files AS f
+			WHERE s.file_id=f.id
+				AND f.id=?
+				AND s.id=?) AS count,
+			(SELECT name
+				FROM sheets
+				WHERE id=?) AS sheet_name,
+			(SELECT id_auto
+				FROM sheets
+				WHERE id=?) AS id_auto,
+			(SELECT is_super
+			FROM users
+			WHERE email=?) AS is_super;
+	`, fileID, sheetID, sheetID, sheetID, email)
+	if err := row.Scan(&_count, &sheetName, &sheetIDAuto, &isSuper); err == nil {
+		if _count != 1 || !sheetName.Valid || !sheetIDAuto.Valid {
+			functions.ResponseError(w, 404, "해당 파일이나 시트가 존재하지 않습니다.")
 			return
 		}
+		if !isSuper.Valid {
+			functions.ResponseError(w, 401, "등록되지 않은 사용자입니다.")
+			return
+		}
+	} else {
+		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
+		return
 	}
 
 	// Parse Request Data
@@ -86,9 +106,9 @@ func (e *Endpoints) ReservationPost(w http.ResponseWriter, r *http.Request, ps h
 		SELECT cell_start, cell_end
 		FROM transactions
 		WHERE transaction_type=1
-			AND timetable_id=?
+			AND sheet_id=?
 			AND cell_column=?;
-	`, timetable, *(reqData.Column))
+	`, sheetIDAuto.Int64, *(reqData.Column))
 	if err == sql.ErrNoRows {
 		isPossible = true
 	}
@@ -119,11 +139,11 @@ loopCheckingValidation:
 
 	// Querying
 	res, err := tx.Exec(`
-		INSERT INTO transactions (transaction_type, user_id, timetable_id, lecture, capacity, cell_column, cell_start, cell_end, professor)
+		INSERT INTO transactions (transaction_type, user_id, sheet_id, lecture, capacity, cell_column, cell_start, cell_end, professor)
 		VALUES (1, (
 			SELECT id FROM users WHERE email=?
 		), ?, ?, ?, ?, ?, ?, ?);
-		`, email, timetable, *(reqData.Lecture), *(reqData.Capacity), *(reqData.Column), *(reqData.Start), *(reqData.End), *(reqData.Professor))
+		`, email, sheetIDAuto.Int64, *(reqData.Lecture), *(reqData.Capacity), *(reqData.Column), *(reqData.Start), *(reqData.End), *(reqData.Professor))
 	if err != nil {
 		functions.ResponseError(w, 500, err.Error())
 		return
@@ -134,14 +154,13 @@ loopCheckingValidation:
 	sheetIDint, _ := strconv.Atoi(sheetID)
 	sr := utils.NewSheetsRequest(
 		fileID,
-		_timetableName,
+		sheetName.String,
 		int64(sheetIDint),
 		*(reqData.Column),
 		int64(*(reqData.Start)),
 		int64(*(reqData.End)),
 		cellValue,
 	)
-	fmt.Println(sr)
 	err = e.Sheets.WriteAndMerge(sr)
 	if err != nil {
 		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
@@ -171,7 +190,7 @@ loopCheckingValidation:
 	functions.ResponseOK(w, "success", resp)
 }
 
-// DELETE /timetables/<file_id>/<sheet_id>/reservation/<reservation_id>
+// DELETE /files/<file_id>/<sheet_id>/reservation/<reservation_id>
 func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Get user email
 	var email string
@@ -188,29 +207,33 @@ func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps
 	reservationID := ps.ByName("reservation_id")
 
 	// Check Permission
-	var isSuper int64
-	var _timetableName string
-	timetable := fmt.Sprintf("%s,%s", fileID, sheetID)
+	var _count int64
+	var isSuper sql.NullInt64
+	var sheetName sql.NullString
 	row := e.DB.QueryRow(`
-		SELECT name
-		FROM timetables
-		WHERE timetable_id=?;
-	`, timetable)
-	if err := row.Scan(&_timetableName); err != nil {
-		if err == sql.ErrNoRows {
-			functions.ResponseError(w, 404, "존재하지 않는 timetable.")
+		SELECT
+			(SELECT count(s.id)
+			FROM sheets AS s, files AS f
+			WHERE s.file_id=f.id
+				AND f.id=?
+				AND s.id=?) AS count,
+			(SELECT name
+				FROM sheets
+				WHERE id=?) AS sheet_name,
+			(SELECT is_super
+			FROM users
+			WHERE email=?) AS is_super;
+	`, fileID, sheetID, sheetID, email)
+	if err := row.Scan(&_count, &sheetName, &isSuper); err == nil {
+		if _count != 1 || !sheetName.Valid {
+			functions.ResponseError(w, 404, "해당 파일이나 시트가 존재하지 않습니다.")
 			return
 		}
-	}
-
-	row = e.DB.QueryRow(`
-		SELECT is_super FROM users WHERE email=?
-	`, email)
-	if err := row.Scan(&isSuper); err != nil {
-		if err == sql.ErrNoRows {
-			functions.ResponseError(w, 401, "해당 유저가 존재하지 않음")
+		if !isSuper.Valid {
+			functions.ResponseError(w, 401, "등록되지 않은 사용자입니다.")
 			return
 		}
+	} else {
 		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
 		return
 	}
@@ -241,7 +264,7 @@ func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps
 		functions.ResponseError(w, 500, "예기치 못한 에러 발생 : "+err.Error())
 		return
 	}
-	if isSuper == 0 {
+	if isSuper.Int64 == 0 {
 		if _email != email {
 			functions.ResponseError(w, 403, "예약 접근 권한 부족")
 			return
@@ -269,7 +292,7 @@ func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps
 	sheetIDint, _ := strconv.Atoi(sheetID)
 	sr := utils.NewSheetsRequest(
 		fileID,
-		_timetableName,
+		sheetName.String,
 		int64(sheetIDint),
 		_cellColumn,
 		_cellStart,

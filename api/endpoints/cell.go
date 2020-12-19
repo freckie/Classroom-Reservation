@@ -12,7 +12,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// GET /timetables/<file_id>/<sheet_id>/cell
+// GET /files/<file_id>/<sheet_id>/cell
 func (e *Endpoints) CellGet(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Get user email
 	var email string
@@ -57,28 +57,32 @@ func (e *Endpoints) CellGet(w http.ResponseWriter, r *http.Request, ps httproute
 	}
 
 	// Check Permission
-	var _count, isSuper int64
-	timetable := fmt.Sprintf("%s,%s", fileID, sheetID)
+	var _count int64
+	var isSuper, sheetIDAuto sql.NullInt64
 	row := e.DB.QueryRow(`
-		SELECT count(timetable_id)
-		FROM allowlist
-		WHERE timetable_id=?;
-	`, timetable)
-	if err := row.Scan(&_count); err == nil {
-		if _count <= 0 {
-			functions.ResponseError(w, 404, "존재하지 않는 timetable.")
+		SELECT
+			(SELECT count(s.id)
+			FROM sheets AS s, files AS f
+			WHERE s.file_id=f.id
+				AND f.id=?
+				AND s.id=?) AS count,
+			(SELECT id_auto
+				FROM sheets
+				WHERE id=?) AS id_auto,
+			(SELECT is_super
+			FROM users
+			WHERE email=?) AS is_super;
+	`, fileID, sheetID, sheetID, email)
+	if err := row.Scan(&_count, &sheetIDAuto, &isSuper); err == nil {
+		if _count != 1 || !sheetIDAuto.Valid {
+			functions.ResponseError(w, 404, "해당 파일이나 시트가 존재하지 않습니다.")
 			return
 		}
-	}
-
-	row = e.DB.QueryRow(`
-		SELECT is_super FROM users WHERE email=?
-	`, email)
-	if err := row.Scan(&isSuper); err != nil {
-		if err == sql.ErrNoRows {
-			functions.ResponseError(w, 401, "해당 유저가 존재하지 않음")
+		if !isSuper.Valid {
+			functions.ResponseError(w, 401, "등록되지 않은 사용자입니다.")
 			return
 		}
+	} else {
 		functions.ResponseError(w, 500, "예기치 못한 에러 : "+err.Error())
 		return
 	}
@@ -93,8 +97,8 @@ func (e *Endpoints) CellGet(w http.ResponseWriter, r *http.Request, ps httproute
 		FROM transactions AS t, users AS u
 		WHERE t.user_id=u.id
 			AND t.transaction_type=1
-			AND t.timetable_id=?
-			AND t.cell_column=?;`, timetable, cellColumn)
+			AND t.sheet_id=?
+			AND t.cell_column=?;`, sheetIDAuto.Int64, cellColumn)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			resp.CellsCount = 0
