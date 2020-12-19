@@ -74,6 +74,7 @@ func main() {
 	router.GET("/api", ep.IndexGet)
 	router.GET("/api/users", ep.UsersGet)
 	router.POST("/api/users", ep.UsersPost)
+	router.GET("/api/files", ep.FilesGet)
 	router.GET("/api/files/:file_id/:sheet_id/cell", ep.CellGet)
 	router.POST("/api/files/:file_id/:sheet_id/reservation", ep.ReservationPost)
 	router.DELETE("/api/files/:file_id/:sheet_id/reservation/:reservation_id", ep.ReservationDelete)
