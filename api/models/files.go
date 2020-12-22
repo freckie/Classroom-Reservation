@@ -10,3 +10,7 @@ type FilesGetItem struct {
 	FileName  string `json:"file_name"`
 	CreatedAt string `json:"created_at"`
 }
+
+type FilesPostResponse struct {
+	FileID string `json:"file_id"`
+}

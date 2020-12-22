@@ -15,7 +15,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// POST /files/<file_id>/<sheet_id>/reservation
+// POST /files/<file_id>/sheets/<sheet_id>/reservation
 func (e *Endpoints) ReservationPost(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Get user email
 	var email string
@@ -190,7 +190,7 @@ loopCheckingValidation:
 	functions.ResponseOK(w, "success", resp)
 }
 
-// DELETE /files/<file_id>/<sheet_id>/reservation/<reservation_id>
+// DELETE /files/<file_id>/sheets/<sheet_id>/reservation/<reservation_id>
 func (e *Endpoints) ReservationDelete(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Get user email
 	var email string

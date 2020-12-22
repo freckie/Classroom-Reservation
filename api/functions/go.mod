@@ -6,4 +6,6 @@ require (
 	classroom/models v0.0.0
 )
 
-replace classroom/models v0.0.0 => ../models
+replace (
+	classroom/models v0.0.0 => ../models
+)

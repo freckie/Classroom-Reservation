@@ -1,4 +1,4 @@
-module classroom
+module classroom/utils
 
 go 1.14
 

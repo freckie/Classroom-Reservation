@@ -12,7 +12,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// GET /files/<file_id>/<sheet_id>/cell
+// GET /files/<file_id>/sheets/<sheet_id>/cell
 func (e *Endpoints) CellGet(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Get user email
 	var email string

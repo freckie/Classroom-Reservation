@@ -12,7 +12,8 @@ type Config struct {
 }
 
 type ConfigGoogle struct {
-	CredentialsPath string `json:"credentials_path"`
+	CredentialsPath   string `json:"credentials_path"`
+	DriveRootFolderID string `json:"drive_root_folder_id"`
 }
 
 type ConfigServer struct {

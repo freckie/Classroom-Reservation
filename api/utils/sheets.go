@@ -11,11 +11,13 @@ import (
 	"google.golang.org/api/sheets/v4"
 )
 
+// SheetsService is a wrapper for Spread Sheets Service and its context.
 type SheetsService struct {
 	srv *sheets.Service
 	ctx context.Context
 }
 
+// NewSheetsService is a factory function which returns a new SheetsService{}.
 func NewSheetsService(credentialsPath string) (*SheetsService, error) {
 	b, err := ioutil.ReadFile(credentialsPath)
 	if err != nil {
@@ -46,6 +48,7 @@ func NewSheetsService(credentialsPath string) (*SheetsService, error) {
 	return srv, nil
 }
 
+// WriteAndMerge makes requests that merge cells and write value into cells.
 func (s *SheetsService) WriteAndMerge(sr SheetsRequest) error {
 	req := &sheets.Request{}
 	req.MergeCells = &sheets.MergeCellsRequest{
@@ -73,6 +76,7 @@ func (s *SheetsService) WriteAndMerge(sr SheetsRequest) error {
 	return nil
 }
 
+// RemoveValue makes requests that clear  and unmerge cells.
 func (s *SheetsService) RemoveValue(sr SheetsRequest) error {
 	req := &sheets.Request{}
 	req.UnmergeCells = &sheets.UnmergeCellsRequest{
@@ -109,6 +113,54 @@ func (s *SheetsService) RemoveValue(sr SheetsRequest) error {
 	return nil
 }
 
+func (s *SheetsService) GetAllSheetProperties(fileID string) ([]*sheets.SheetProperties, error) {
+	var result []*sheets.SheetProperties
+
+	req, err := s.srv.Spreadsheets.Get(fileID).Do()
+	if err != nil {
+		return nil, err
+	}
+
+	for idx := range req.Sheets {
+		result = append(result, req.Sheets[idx].Properties)
+	}
+
+	return result, nil
+}
+
+func (s *SheetsService) ProtectAll(fileID string, sheetIDs []int64) error {
+	reqs := []*sheets.Request{}
+
+	for _, sheetID := range sheetIDs {
+		req := &sheets.Request{}
+		req.AddProtectedRange = &sheets.AddProtectedRangeRequest{
+			ProtectedRange: &sheets.ProtectedRange{
+				Range: &sheets.GridRange{
+					SheetId:          sheetID,
+					StartColumnIndex: 0,
+					EndColumnIndex:   100,
+					StartRowIndex:    0,
+					EndRowIndex:      1000,
+				},
+			},
+		}
+
+		reqs = append(reqs, req)
+	}
+
+	rb := &sheets.BatchUpdateSpreadsheetRequest{
+		Requests: reqs,
+	}
+
+	_, err := s.srv.Spreadsheets.BatchUpdate(fileID, rb).Context(s.ctx).Do()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SheetsRequest is a wrapper for request, especially WriteAndMerge() and RemoveValue() functions.
 type SheetsRequest struct {
 	SpreadSheetID string
 	SheetName     string
@@ -118,6 +170,7 @@ type SheetsRequest struct {
 	Value         string
 }
 
+// NewSheetsRequest is a factory function which returns a new SheetsRequest{}.
 func NewSheetsRequest(
 	spreadSheetID, sheetName string, sheetID int64, column string, start, end int64, value string) SheetsRequest {
 	colIndex := A1ToInt(column)

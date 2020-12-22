@@ -59,7 +59,11 @@ func main() {
 	defer db.Close()
 
 	// Google API Setting
-	sheets, err := utils.NewSheetsService(cfg.Google.CredentialsPath)
+	drive, err := utils.NewDriveService(cfg.Google.CredentialsPath, cfg.Google.DriveRootFolderID) // save token with drive, sheets scope
+	if err != nil {
+		log.Fatal(err)
+	}
+	sheets, err := utils.NewSheetsService(cfg.Google.CredentialsPath) // just load token
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -67,6 +71,7 @@ func main() {
 	ep := endpoints.Endpoints{
 		DB:     db,
 		Sheets: sheets,
+		Drive:  drive,
 	}
 
 	// Router Setting
@@ -75,9 +80,12 @@ func main() {
 	router.GET("/api/users", ep.UsersGet)
 	router.POST("/api/users", ep.UsersPost)
 	router.GET("/api/files", ep.FilesGet)
-	router.GET("/api/files/:file_id/:sheet_id/cell", ep.CellGet)
-	router.POST("/api/files/:file_id/:sheet_id/reservation", ep.ReservationPost)
-	router.DELETE("/api/files/:file_id/:sheet_id/reservation/:reservation_id", ep.ReservationDelete)
+	router.POST("/api/files", ep.FilesPost)
+	router.POST("/api/files/:file_id/share", ep.FilesSharePost)
+	router.POST("/api/files/:file_id/protect", ep.FilesProtectPost)
+	router.GET("/api/files/:file_id/sheets/:sheet_id/cell", ep.CellGet)
+	router.POST("/api/files/:file_id/sheets/:sheet_id/reservation", ep.ReservationPost)
+	router.DELETE("/api/files/:file_id/sheets/:sheet_id/reservation/:reservation_id", ep.ReservationDelete)
 
 	// Local Mode
 	portStr := strconv.Itoa(cfg.Server.Port)
