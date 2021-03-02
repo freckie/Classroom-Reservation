@@ -7,5 +7,6 @@ An Web-based Classroom Reservation Service for Kyung Hee Univ.
 
 ## Environment
 - Google Cloud Platform
-- Google Apps Script
-(under development)
+- Google Apps Script (to deploy as [Add-ons](https://developers.google.com/gsuite/add-ons/concepts/types#editor_add-ons))
+- Front-end Server (react)
+- Back-end Server (go)
