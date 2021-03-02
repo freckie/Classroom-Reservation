@@ -2,39 +2,157 @@
 <html>
   <head>
     <base target="_top">
+    <style>      
+      #sidebar-form {
+        width: 95%:
+        margin: 0 auto;
+        
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        grid-row-gap: 20px;
+      }
+      
+      .form-label {
+      }
+      
+      .form-input {
+      }
+    
+      .formSubmitBtn {
+        width: 100%;
+        height: 32px;
+        margin-top: 20px;
+        background-color: #891a2b;
+        color: white;
+        border: none;
+        disabled: false;
+      }
+
+      .disabledBtn{
+        background-color: #d9d9d9;
+        disabled: true;
+      }
+      
+      #reservation-form {
+        display: block;
+      }
+      
+      #cancel-form {
+        display: none;
+      }
+      
+      .wp-table tr:nth-child(odd) {
+        background-color: #fff;
+      }
+      
+      .wp-table tr:nth-child(even) {
+        background-color: #f1f1f1;
+      }
+      
+      .wp-table tr {
+        border-bottom: 1px solid #ddd;
+      }
+       
+      .wp-table td:first-child {
+        padding-left: 16px;
+        font-weight: bold;
+        border-right: 1px solid #ddd;
+      }
+      
+      
+      .wp-table td {
+        padding: 7px 7px;
+        display: table-cell;
+        text-align: left;
+        vertical-align: top;
+        font-size: 15px!important;
+      }
+      
+      
+      .wp-table {
+
+        border: 1px solid #ccc;
+        border-collapse: collapse;
+        border-spacing: 0;
+        width: 95%;
+        display: table;
+      }
+      
+      #formSubmitBtn {
+        cursor: pointer;
+      }
+    </style>
   </head>
+  
   <body>
-    <form>
-      <input type="hidden" id="errorCode" value="error-0">
-      <p>
-		<strong>교수명</strong>
-		<input type="text" id="formInputProfName" name="name" value="김가나">
-	  </p>
-	  <p>
-		<strong>강좌코드</strong>
-		<input type="text" id="formInputClassCode" name="classcode" value="CEEEE">
-	  </p>
-	  
-	  <p>
-        <strong>강의명</strong>
-		<input type="text" id="formInputClassName" name='classname' value="공학과경영">
-	  </p>
-      <p>
-        <strong>정원</strong>
-		<input type="number" id="formInputNumPeople" name="num-people" value="1" min="1">
-	  </p>
-      <p>
-        <strong>강의실</strong>
-		<input type="text" id="formInputClassRoom" name="classroom" value="멀303" placeholder="셀을 선택하면 자동으로 입력됩니다." disabled>
-	  </p>
-      <p>
-        <strong>선택 시간</strong>
-		<input type="text" id="formInputTime" name="time" value="" placeholder="셀을 선택하면 자동으로 입력됩니다." disabled>
-	  </p>
-      <p>
-		<input type="button" value="제출" id="formSubmitBtn">
-      </p>
-     </form>
-     <?!= HtmlService.createHtmlOutputFromFile('SidebarJS').getContent(); ?>
+    <div id="reservation-form">
+      <h3>강의실 예약 생성</h3>
+  
+      <!-- Sidebar Form -->
+    
+      <form id="sidebar-form">
+      
+        <input type="hidden" id="errorCode" value="error-0">
+        <input type="hidden" id="column" value="">
+        <input type="hidden" id="start" value="">
+        <input type="hidden" id="end" value="">
+	    <span class="form-label">교수명</span>
+        <input type="text" class="form-input" id="formInputProfName" name="name" value="" placeholder="교수명을 입력해주세요.">
+
+
+        <span class="form-label">강의명</span>
+	    <input type="text" class="form-input" id="formInputClassName" name='classname' value="" placeholder="강의명을 입력해주세요.">
+      
+        <span class="form-label">정원</span>
+        <input type="number" class="form-input" id="formInputNumPeople" name="num-people" value="5" min="1">
+        
+        <span class="form-label">강의실</span>
+        <input type="text" class="form-input" id="formInputClassRoom" name="classroom" value="" placeholder="셀을 선택해주세요." disabled>
+    
+        <span class="form-label">선택 시간</span>
+        <input type="text" class="form-input" id="formInputTime" name="time" value="" placeholder="셀을 선택해주세요." disabled>
+     
+      </form> <!-- End of Sidebar Form -->
+    
+      <button class="formSubmitBtn" id="reservationBtn">제출</button>
+    </div>
+    
+    <div id="cancel-form">
+      <h3>예약 정보</h3>
+      <input type="hidden" id="reservedId" value="">
+      <input type="hidden" id="reservedColumn" value="">
+      <input type="hidden" id="reservedStart" value="">
+      <input type="hidden" id="reservedEnd" value="">
+      <table class="wp-table">
+        
+        <tr>
+          <td>교수명</td>
+          <td id="reservedProfName"></td>
+        </tr>
+        <tr>
+          <td>강의명</td>
+          <td id="reservedClassName"></td>
+        </tr>
+        <tr>
+          <td>정원</td>
+          <td id="reservedNumPeople"></td>
+        </tr>
+        <tr>
+          <td>강의실</td>
+          <td id="reservedClassRoom"></td>
+        </tr>
+        <tr>
+          <td>예약 시간</td>
+          <td id="reservedTime"></td>
+        </tr>
+        <tr>
+          <td>생성 시간</td>
+          <td id="reservedCreatedAt"></td>
+        </tr>
+      </table>
+      <button class="formSubmitBtn" id="cancelBtn">예약 취소</button>
+    </div>
+    <!-- JavaScript for controlling Sidebar -->
+    <?!= HtmlService.createHtmlOutputFromFile('SidebarJS').getContent(); ?>
   </body>
 </html>
