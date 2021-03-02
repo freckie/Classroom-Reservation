@@ -1,130 +1,239 @@
 <script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
 <script>
+  // Global variables
+  var rangeState = 3;
+  var STATE = {
+    ENABLE: 0,
+    DISABLE: 1,
+    OWNER: 2
+  };
+
   /**
    * Run initializations on sidebar load.
    */
   $(function() {
-    $('#formSubmitBtn').click(submit);
-
-    // Assign handler functions to sidebar elements here, if needed.
-
-    // Call the server here to retrieve any information needed to build
-    // the dialog, if necessary.
-
-    // Start polling for updates        
-    poll(1000);
+    $('#reservationBtn').click(submit);
+    $('#cancelBtn').click(cancelReservation);
+    poll(500);
   });
 
-  /**
-   * Poll a server-side function at the given interval, to have
-   * results passed to a successHandler callback.
-   *
-   * https://stackoverflow.com/a/24773178/1677912
-   *
-   * @param {Number} interval   (optional) Time in ms between polls.
-   *                            Default is 1s (1000ms)
-   */
   function poll(interval) {
-    interval = interval || 1000;
-    //interval = 500;
+    interval = interval || 500;
     setTimeout(function() {
       google.script.run
-        .withSuccessHandler(updateFormValues)
-        .withFailureHandler(function (error) { //To-do! Failuer처리는 어떻게?
-        var div = document.getElementById('error');
-        div.innerHTML = "ERROR: " + error.message;
-      })
+        .withSuccessHandler(checkHeaderRange)
+        .withFailureHandler(function (error) {
+          console.log('[getRange() Error]', error.message);
+        })
         .getRange();
     }, interval);
-  };
-  
-  
-  function validateRange(range, topHeader) {
-    // domain내의 범위인가 (top header제외)
-    const top = 2;
-    const outOfRange = 34;
-    if (top >= range.row || outOfRange <= range.row)
-      return {code: "error-04"};
-    
-    //range column이 left header와 right header사이에 있는가  
-    const leftHeader = 2;
-    const rightHeader = 35;
-    if (range.col <= leftHeader || range.col >= rightHeader){ //To-do! 고정값으로 할 것인가, sheet인식해서 값 변동시킬 것인가.
-      return {code: "error-02"};
-      } 
-        
-    //range가 1열로 이루어져있는가
-    if (range.width != 1)
-      return {code: "error-01"};      
-      
-    // 이미 예약된 항목과 겹치는가 //To-do! 백엔드에서 동시성 제어하도록 전환할 것
-    for (var i = 0; i < range.height; ++i) {
-      for (var j = 0; j < range.width; ++j) {
-        if (range.values[i][j] !== ""){
-          return {code: "error-05"};
-        }
-      }
-    }
-    
-    //수용인원을 초과하는가
-    var lastIdx = topHeader.lastIndexOf("명")
-    var startIdx = topHeader.lastIndexOf("\n", lastIdx) + 1;
-    var capacity = parseInt(topHeader.substring(startIdx, lastIdx));
-    if (capacity < $('input[name=num-people]').val())
-      return {code: "error-03"};
-    
-    return {code: ""};
   }
   
-  
-  
- 
-  
-  // param: rangeInfo -> [{int col, int width, int height}, String topHeader's value (like 전정\n205\n202명)]
-  function updateFormValues([range, topHeader, date]) {
-    var ret = validateRange(range, topHeader);
-    if (ret.code === "") {
-      var parsed = topHeader.split("\n");
-      var classroom = parsed[0] + " " + parsed[1];
-      
-      $('input[name=classroom]').val(classroom);
-      
-      var start = 9 * 60 + 30 * (range.row - 3);
-      var stop = start + 30 * range.height;
-      var startStr = parseInt(start/60).toString() + ":" + ((start%60)<10 ? '0' + (start % 60).toString() : (start % 60).toString());
-      var stopStr = parseInt(stop/60).toString() + ":" + ((stop%60)<10 ? '0' + (stop % 60).toString() : (stop % 60).toString());
-      var timeInterval = startStr + "~" + stopStr;
-      $('input[name=time]').val(date + " " + timeInterval);
-      $('#errorCode').val(ret.code);
-      poll(1000);
+  function validateRange([range, topHeader, date, data, email]) {
+    // 예약된 cell이 없다 -> ENABLE(수용인원체크)
+    // 예약안된 cell이 없고, 단일 트랜잭션id면서 0이 아니고, email같다. -> OWNER
+    // 그 외 -> DISABLE
+    var cnt = 0;
+    var isUniTransaction = true;
+    var transactionId = data.cells[0].transaction_id;
+    for(var i=0; i<data.cells_count; ++i){
+       if(transactionId !== data.cells[i].transaction_id){
+         isUniTransaction = false;
+       }
+       if(data.cells[i].is_reserved){
+         cnt++;
+       }
+    }
+    if(cnt === 0) {
+      var lastIdx = topHeader.lastIndexOf("명")
+      var startIdx = topHeader.lastIndexOf("\n", lastIdx) + 1;
+      var capacity = parseInt(topHeader.substring(startIdx, lastIdx));
+      if (capacity < $('input[name=num-people]').val()){
+        //console.log("수용인원초과");
+        updateFormValues(range, topHeader, date, {code: "error-03"});
+        return;
+      }
+      else {
+        //console.log("enable");
+        updateFormValues(range, topHeader, date, {code: ""});
+        return;
+      }
+    }
+    if(cnt === data.cells_count && isUniTransaction && transactionId !== 0) {
+      var ret = {
+        reservedId: transactionId,
+        profName: data.cells[0].professor,
+        className: data.cells[0].lecture,
+        numPeople: data.cells[0].capacity,
+        createdAt: data.cells[0].created_at
+      }
+      if(data.cells[0].user_email === email){
+        ret['code'] = "owner";  
+      }
+      else{
+        ret['code'] = "non-owner";
+      }
+      updateFormValues(range, topHeader, date, ret);
       return;
+      //console.log("owner");
       
     }
-    $('input[name=classroom]').val("");
-    $('input[name=time]').val("");
-    $('#errorCode').val(ret.code);
-    poll(1000);
-  };
+    else {
+      //console.log("이미 예약됨");
+      updateFormValues(range, topHeader, date, {code: "error-05"});
+      return;
+    }
+  }
+  
+  function convertToSSColumn(num){
+    var s = '', t;
+
+    while (num > 0) {
+      t = (num - 1) % 26;
+      s = String.fromCharCode(65 + t) + s;
+      num = (num - t)/26 | 0;
+    }
+    return s || undefined;
+  }
+  
+  function checkHeaderRange([range, topHeader, date]) {
+    // 특수 케이스 1. 1행 1열(날짜 표기 셀)을 포함할 경우
+    if (range.col === 1 && range.row === 1){
+      updateFormValues(range, topHeader, date, {code: "error-02"});
+      return;
+    }
+    
+    // 시간 범위 오류 (TopHeader 포함)
+    const top = 2;
+    const outOfRange = 33;
+    if (top >= range.row || outOfRange <= (range.row + range.height - 1)){
+      updateFormValues(range, topHeader, date, {code: "error-04"});
+      return;
+    }
+    
+    // range column이 left header와 right header사이에 있는가  
+    const leftHeader = 2;
+    const rightHeader = 35;
+    if (range.col <= leftHeader || (range.col + range.width -1) >= rightHeader) { //To-do! 고정값으로 할 것인가, sheet인식해서 값 변동시킬 것인가.
+      updateFormValues(range, topHeader, date, {code: "error-02"});
+      return;
+    } 
+    
+    //range가 1열로 이루어져있는가
+    if (range.width != 1){
+      updateFormValues(range, topHeader, date, {code: "error-01"});
+      return;
+    }
+    
+    // Header에 해당되지 않으니 이미 예약된 항목과 겹치는가 확인필요
+    console.log("Current Cell : (" + convertToSSColumn(range.col) + ", " + range.row + ", " + (range.row+range.height-1) + ")");
+    google.script.run
+        .withSuccessHandler(validateRange)
+        .withUserObject(this)
+        .requestReservationInfo(range, topHeader, date, convertToSSColumn(range.col), range.row, range.row + range.height - 1);
+  }
+   
+  function getTimeInterval(range, topHeader, date) {
+    var start = 9 * 60 + 30 * (range.row - 3);
+    var stop = start + 30 * range.height;
+    var startStr = parseInt(start/60).toString() + ":" + ((start%60)<10 ? '0' + (start % 60).toString() : (start % 60).toString());
+    var stopStr = parseInt(stop/60).toString() + ":" + ((stop%60)<10 ? '0' + (stop % 60).toString() : (stop % 60).toString());
+    var timeInterval = date + " " + startStr + "~" + stopStr;
+    return timeInterval;
+  }
+
+  // param: rangeInfo -> [{int col, int width, int height}, String topHeader's value (like 전정\n205\n202명)]
+  function updateFormValues(range, topHeader, date, ret) {
+    if (ret.code === "") {
+      $('#column').val(convertToSSColumn(range.col));
+      $('#start').val(range.row);
+      $('#end').val(range.row + range.height - 1);
+      var parsed = topHeader.split("\n");
+      var classroom = parsed[0] + " " + parsed[1];
+      $('#formInputClassRoom').val(classroom);
+      $('#formInputTime').val(getTimeInterval(range, topHeader, date));
+      $('#errorCode').val(ret.code);
+      $('#reservation-form').show();
+      $('#cancel-form').hide();
+    } 
+    else if(ret.code.includes("owner")){
+      console.log(ret.profName);
+      $('#reservedId').val(ret.reservedId);
+      $('#reservedColumn').val(convertToSSColumn(range.col));
+      $('#reservedStart').val(range.row);
+      $('#reservedEnd').val(range.row + range.height - 1);
+      $('#reservedProfName').html(ret.profName);
+      $('#reservedClassName').html(ret.className);
+      $('#reservedNumPeople').html(ret.numPeople);
+      var parsed = topHeader.split("\n");
+      var classroom = parsed[0] + " " + parsed[1];
+      $('#reservedClassRoom').html(classroom);
+      $('#reservedTime').html(getTimeInterval(range, topHeader, date));
+      $('#reservedCreatedAt').html(ret.createdAt);
+      if(ret.code === "owner"){
+        $('#cancelBtn').prop("disabled", false);
+        if($('#cancelBtn').hasClass("disabledBtn")){
+          $('#cancelBtn').removeClass("disabledBtn");
+        }
+      }
+      else{
+        $('#cancelBtn').prop("disabled", true);
+        if(!$('#cancelBtn').hasClass("disabledBtn")){
+          $('#cancelBtn').addClass("disabledBtn");
+        }
+      }
+      $('#reservation-form').hide();
+      $('#cancel-form').show();
+    }
+    else {
+      $('#reservation-form').show();
+      $('#cancel-form').hide();
+      $('input[name=classroom]').val("");
+      $('input[name=time]').val("");
+      $('#errorCode').val(ret.code);
+    }
+    poll(500);
+  }
 
   function submit() {
-  // 변수들
-  var inputValues = {
-      profName: $('#formInputProfName').val(),
-      classCode: $('#formInputClassCode').val(),
-      className: $('#formInputClassName').val(),
-      numPeople: $('#formInputNumPeople').val(),
+    // 변수들
+    var inputValues = {
+      column: $('#column').val(),
+      start: $('#start').val(),
+      end: $('#end').val(),
+      lecture: $('#formInputClassName').val(),
+      professor: $('#formInputProfName').val(),
+      capacity: $('#formInputNumPeople').val(),
       classRoom: $('#formInputClassRoom').val(),
       time: $('#formInputTime').val()
-  };
-  var errorCode = $('#errorCode').val();
+    };
+    var errorCode = $('#errorCode').val();
 
-  google.script.run
-      .withSuccessHandler(function () {
+    google.script.run
+      .withSuccessHandler(function (status) {
+        console.log("submit() :", status);
+        if(status === 200) {
+          $('#formInputClassName').val('');
+          $('#formInputProfName').val('');
+        }
       })
-      .withFailureHandler(function (error) {
-      console.log('[submit() Error]', error);
+      .withFailureHandler(function (err) {
+        console.log('[submit() Error]', err);
       })
       .submit(inputValues, errorCode);
   }
-
+  
+  function cancelReservation() {
+    var id = $('#reservedId').val();
+    var column = $('#reservedColumn').val();
+    var start = $('#reservedStart').val();
+    var end = $('#reservedEnd').val();
+    google.script.run
+      .withSuccessHandler(function () {
+      })
+      .withFailureHandler(function (err) {
+        console.log('[cancle() Error]', err);
+      })
+      .cancel(id, column, start, end);
+  }
 </script>
